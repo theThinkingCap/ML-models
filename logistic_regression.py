@@ -33,7 +33,8 @@ def train(w,x,t):
         w -= 0.1 * dw
     return w
 
-def standardize(x):
-    means = np.mean(x, axis=1,keepdims=True)
-    sd = np.std(x,axis=1,keepdims=True)
+def get_moments(x):
+    return np.mean(x, axis=1,keepdims=True), np.std(x,axis=1,keepdims=True)
+
+def standardize(x,means=0,sd=1):
     return (x - means)/sd
