@@ -8,7 +8,8 @@ import numpy as np
 
 def prediction(w,x):
     z = np.dot(w,x)    # Activations
-    numer = np.exp(z)
+    b = np.max(z,axis=0,keepdims=True)
+    numer = np.exp(z-b)
     denom = np.sum(numer, axis=0,keepdims=True)
     return numer/denom
 
@@ -20,7 +21,7 @@ def prediction(w,x):
 #   t = 1-of-k encoding data labels
 
 def train(w,x,t):
-    x = np.array(x,dtype=np.float128)
+#    x = np.array(x,dtype=np.float128)
     n = x.shape[1]
     x_trans = np.transpose(x)
 
