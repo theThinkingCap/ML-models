@@ -11,10 +11,6 @@ dSig = lambda x: x *(1.0 - x)
 def sigmoid_(z):
     entries = [[sigmoid_pos(x) if x >= 0 else sigmoid_neg(x) for x in row] for row in z]
     return np.array(entries)
-        # if z >= 0:
-        #     return sigmoid_pos(z)
-        # else:
-        #     return sigmoid_neg(z)
 
 def softmax_(z):
     b = np.max(z,axis=0,keepdims=True)
@@ -25,8 +21,27 @@ def softmax_(z):
 # softOut = K x 1 softmax output
 def dSoftmax(softOut):
     k = np.size(softOut,0)
-    p_i = np.zeros([k,k])
-    return temp
+    # p_i is K x K matrix of repeated columns of softOut
+    p_i = np.repeat(softOut,k,axis=1)
+    # p_j : K x K mtx where every column corresponds to softOut at particular index (ie. the tranpose of p_i)
+    p_j = p_i.T
+    p_i_Diag = np.diagflat(softOut)
+    deriv = p_i_Diag - p_i * p_j
+    return deriv
+
+def get_output_dW(allLayers,layerN,dE_dO):
+    all_dE_dZ = []
+    gradients = []
+    tempOut = allLayers[layerN - 1]
+    tempIn = allLayers[layerN - 2]
+    for ind in range(np.size(allLayers[0], 1)):
+        dSoft = dSoftmax(tempOut[:, np.newaxis, ind])
+        temp_dEdZ = np.dot(dE_dO[:, ind,np.newaxis].T, dSoft)
+        print(dE_dO[:,ind].shape)
+        temp_dEdW = np.dot(tempIn[:, np.newaxis, ind], temp_dEdZ)
+        all_dE_dZ.append(temp_dEdZ)
+        gradients.append(temp_dEdW)
+    return gradients, all_dE_dZ
 
 def get_moments(x):
     return np.mean(x, axis=1,keepdims=True), np.std(x,axis=1,keepdims=True)
@@ -74,36 +89,41 @@ def feed_forward(inpt,w,nLayers,f,g):
 #   w = J x K weight matrix for particular layer
 #   prevGrad = Partial derivative of loss function with respect to the unit's pre-activation value (eg. dE_dz)
 def back_propagate(inpt,w,nLayer,outputs,t):
+    layerGrad = []
+    gradients = []
     newList = [inpt] + outputs
+    nlistLen = len(newList)
     o_ = newList[nLayer+1]
-    prevGrad = (o_ - t)
-    # logg = np.log(o_)
-    # transposed = np.transpose(t)
-    # tempp = np.dot(transposed,logg)
-    # EE  = -np.sum(tempp)
+    dE_dO = o_ - t
     ##EE = -np.sum(np.dot(np.transpose(t),np.log(o_)))
-    EE = np.sum(np.sum(0.5 * (prevGrad)**2,axis=1))
+    EE = np.sum(np.sum(0.5 * (dE_dO)**2,axis=1))
     print("EE ")
     print(EE)
 
-    gradients = []
-    for i in range(len(newList) - 1,0,-1):
-# PROBLEMS WITH O_K and X_K
-        o_k = newList[i]
-        x_k = newList[i-1]
+    prevGrad = dE_dO
 
-        dE_dZ = prevGrad * dSig(o_k)
+    for i in range(nlistLen - 1,0,-1):
+        # PROBLEMS WITH O_K and X_K
+        o_k = newList[i]
+        x_k = newList[i - 1]
+        dSig_O = dSig(o_k)
+
+        dE_dZ = prevGrad * dSig_O
+        print(prevGrad.shape)
         #dE_dZ = np.dot(prevGrad,dSig(o_k))
 
-        #dE_dW = dE_dZ * x_k
-        #dE_dW = np.dot(dE_dZ,np.transpose(x_k))
-        dE_dW = np.dot(dE_dZ,np.transpose(x_k))
-        #dE_dW_ = np.sum(dE_dW,axis=1,keepdims=True)
-        gradients.append(dE_dW)
+        for ex in range(x_k.shape[1]):
+            x_k_n = x_k[:, np.newaxis, ex]
+            dE_dW = np.dot(x_k_n,dE_dZ[:,ex,np.newaxis].T)
+            # dE_dW = dE_dZ * x_k
+            #dE_dW_ = np.sum(dE_dW,axis=1,keepdims=True)
+            layerGrad.append(dE_dW)
 
-        #prevGrad = dE_dZ * w[i-1]
+            #prevGrad = dE_dZ * w[i-1]
         prevGrad = np.dot(np.transpose(w[i-1]),dE_dZ)
-        #prevGrad = np.dot(dE_dZ,w[i-1])
+            #prevGrad = np.dot(dE_dZ,w[i-1])
+        gradients.append(layerGrad)
+        layerGrad = []
 
     return gradients
 
@@ -114,16 +134,13 @@ def train(inpt,w,nHidLayers,t,f,g,numEpoch,learnR):
         gradients = back_propagate(inpt,w,nHidLayers,outputs,t)
         for ind in range(len(gradients)-1,-1,-1):
             w_ind = len(gradients)- 1 - ind
-            #print(w[w_ind])
-            w[w_ind] -= (learnR * gradients[ind])
-            #print(w[w_ind])
+            for n_grad in gradients[ind]:
+                w[w_ind] -= (learnR * n_grad.T)
     return w
 
 def predict(inpt,w,nLayers,f,g,t):
     outputs = feed_forward(inpt,w,nLayers,f,g)
     prediction = outputs[len(outputs) - 1]
-    #print("prediciton")
-    #print(prediction[:,4])
     np.savetxt("Predictions.txt", prediction, delimiter=",")
     counter = 0
     hardPredict = np.argmax(prediction, axis=0)
@@ -133,13 +150,16 @@ def predict(inpt,w,nLayers,f,g,t):
     print ("Test accuracy: " + str(float(counter)/len(hardPredict)))
 
 if __name__=='__main__':
-    nHidUnits = [10]
+    nHidUnits = [11]
     nHidLay = len(nHidUnits)
     nOutputU = 10
     #w = []
 
     # x is a N x numInputs mtx
-
+    x = np.loadtxt(open("PATH/fashion-mnist_train.csv", "rb"), delimiter=",", skiprows=1)
+    x_test = np.loadtxt(open("PATH/fashion-mnist_test.csv", "rb"), delimiter=",", skiprows=1)
+    #x = np.loadtxt(open("PATH/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
+    #x_test = np.loadtxt(open("PATH/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
     truth = np.transpose(x[:, 0]).astype(int)
     truth_test = np.transpose(x_test[:, 0]).astype(int)
 
@@ -168,7 +188,7 @@ if __name__=='__main__':
 
 
     #print(weights[0])
-    w_trained = train(x,weights,nHidLay,t,sigmoid_,softmax_,1000,0.1)
+    w_trained = train(x,weights,nHidLay,t,sigmoid_,softmax_,100,0.1)
     #print(w_trained[0])
     for index,w_ in enumerate(w_trained):
         np.savetxt("weights_nn_layer" + str(index) + ".txt",w_,delimiter=",")
