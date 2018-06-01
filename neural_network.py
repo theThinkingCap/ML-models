@@ -112,19 +112,31 @@ def back_propagate(inpt,w,nLayer,outputs,t):
         print(prevGrad.shape)
         #dE_dZ = np.dot(prevGrad,dSig(o_k))
 
-        for ex in range(x_k.shape[1]):
-            x_k_n = x_k[:, np.newaxis, ex]
-            dE_dW = np.dot(x_k_n,dE_dZ[:,ex,np.newaxis].T)
-            # dE_dW = dE_dZ * x_k
-            #dE_dW_ = np.sum(dE_dW,axis=1,keepdims=True)
-            layerGrad.append(dE_dW)
+        dE_dW = np.matmul(x_k.T[:,:,np.newaxis],dE_dZ.T[:,np.newaxis,:])
+        gradients.append(dE_dW)
+
+        #UNCOMMENT IF NECESSARY
+        # for ex in range(x_k.shape[1]):
+        #     x_k_n = x_k[:, np.newaxis, ex]
+        #     dE_dW = np.dot(x_k_n,dE_dZ[:,ex,np.newaxis].T)
+        #     # dE_dW = dE_dZ * x_k
+        #     #dE_dW_ = np.sum(dE_dW,axis=1,keepdims=True)
+        #     if ex <= x_k.shape[1] / 2  and ex > 2:
+        #         layerGrad[0] += dE_dW
+        #     elif ex > (x_k.shape[1] / 2):
+        #         layerGrad[1] += dE_dW
+        #     else:
+        #         layerGrad.append(dE_dW)
 
             #prevGrad = dE_dZ * w[i-1]
         prevGrad = np.dot(np.transpose(w[i-1]),dE_dZ)
             #prevGrad = np.dot(dE_dZ,w[i-1])
-        gradients.append(layerGrad)
-        layerGrad = []
 
+        #UNCOMMENT If NECESSARY
+        #gradients.append(layerGrad)
+        #layerGrad = []
+
+    print("grad len " + str(gradients[1].shape))
     return gradients
 
 def train(inpt,w,nHidLayers,t,f,g,numEpoch,learnR):
@@ -132,8 +144,9 @@ def train(inpt,w,nHidLayers,t,f,g,numEpoch,learnR):
         print(epoch)
         outputs = feed_forward(inpt, w, nHidLayers, f, g)
         gradients = back_propagate(inpt,w,nHidLayers,outputs,t)
-        for ind in range(len(gradients)-1,-1,-1):
-            w_ind = len(gradients)- 1 - ind
+        gradLen = len(gradients)
+        for ind in range(gradLen-1,-1,-1):
+            w_ind = gradLen - 1 - ind
             for n_grad in gradients[ind]:
                 w[w_ind] -= (learnR * n_grad.T)
     return w
@@ -156,10 +169,10 @@ if __name__=='__main__':
     #w = []
 
     # x is a N x numInputs mtx
-    x = np.loadtxt(open("PATH/fashion-mnist_train.csv", "rb"), delimiter=",", skiprows=1)
-    x_test = np.loadtxt(open("PATH/fashion-mnist_test.csv", "rb"), delimiter=",", skiprows=1)
-    #x = np.loadtxt(open("PATH/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
-    #x_test = np.loadtxt(open("PATH/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
+    x = np.loadtxt(open("/home/alex/ML_datasets/fashion-mnist_train.csv", "rb"), delimiter=",", skiprows=1)
+    x_test = np.loadtxt(open("/home/alex/ML_datasets/fashion-mnist_test.csv", "rb"), delimiter=",", skiprows=1)
+    #x = np.loadtxt(open("/home/alex/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
+    #x_test = np.loadtxt(open("/home/alex/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
     truth = np.transpose(x[:, 0]).astype(int)
     truth_test = np.transpose(x_test[:, 0]).astype(int)
 
@@ -188,7 +201,7 @@ if __name__=='__main__':
 
 
     #print(weights[0])
-    w_trained = train(x,weights,nHidLay,t,sigmoid_,softmax_,100,0.1)
+    w_trained = train(x,weights,nHidLay,t,sigmoid_,softmax_,700,0.1)
     #print(w_trained[0])
     for index,w_ in enumerate(w_trained):
         np.savetxt("weights_nn_layer" + str(index) + ".txt",w_,delimiter=",")
