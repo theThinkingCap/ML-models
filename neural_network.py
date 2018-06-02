@@ -29,20 +29,6 @@ def dSoftmax(softOut):
     deriv = p_i_Diag - p_i * p_j
     return deriv
 
-def get_output_dW(allLayers,layerN,dE_dO):
-    all_dE_dZ = []
-    gradients = []
-    tempOut = allLayers[layerN - 1]
-    tempIn = allLayers[layerN - 2]
-    for ind in range(np.size(allLayers[0], 1)):
-        dSoft = dSoftmax(tempOut[:, np.newaxis, ind])
-        temp_dEdZ = np.dot(dE_dO[:, ind,np.newaxis].T, dSoft)
-        print(dE_dO[:,ind].shape)
-        temp_dEdW = np.dot(tempIn[:, np.newaxis, ind], temp_dEdZ)
-        all_dE_dZ.append(temp_dEdZ)
-        gradients.append(temp_dEdW)
-    return gradients, all_dE_dZ
-
 def get_moments(x):
     return np.mean(x, axis=1,keepdims=True), np.std(x,axis=1,keepdims=True)
 
@@ -89,7 +75,6 @@ def feed_forward(inpt,w,nLayers,f,g):
 #   w = J x K weight matrix for particular layer
 #   prevGrad = Partial derivative of loss function with respect to the unit's pre-activation value (eg. dE_dz)
 def back_propagate(inpt,w,nLayer,outputs,t):
-    layerGrad = []
     gradients = []
     newList = [inpt] + outputs
     nlistLen = len(newList)
@@ -112,7 +97,7 @@ def back_propagate(inpt,w,nLayer,outputs,t):
         print(prevGrad.shape)
         #dE_dZ = np.dot(prevGrad,dSig(o_k))
 
-        dE_dW = np.matmul(x_k.T[:,:,np.newaxis],dE_dZ.T[:,np.newaxis,:])
+        dE_dW = np.sum(np.matmul(x_k.T[:,:,np.newaxis],dE_dZ.T[:,np.newaxis,:]),axis=0,keepdims=True)
         gradients.append(dE_dW)
 
         #UNCOMMENT IF NECESSARY
@@ -148,6 +133,8 @@ def train(inpt,w,nHidLayers,t,f,g,numEpoch,learnR):
         for ind in range(gradLen-1,-1,-1):
             w_ind = gradLen - 1 - ind
             for n_grad in gradients[ind]:
+                #print("w shape " + str(w[w_ind].shape))
+                #print("n grad shape " + str(n_grad.T.shape))
                 w[w_ind] -= (learnR * n_grad.T)
     return w
 
