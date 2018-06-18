@@ -8,6 +8,110 @@ reLU = lambda x: max(0,x)
 
 dSig = lambda x: x *(1.0 - x)
 
+
+
+class NeuralNet:
+
+    # Members:
+    #   hUPL = Number of hidden units per layer
+    #   nHL = Number of hidden layers
+    #   nIn = Number of units in input data
+    #   nOutU = Number of output units
+    #   w = (nHL + 1) list of J x K weight matrix
+    def __init__(self,nHidUnits,nIn,nOutU):
+        self.hUPL = nHidUnits
+        self.nHL = len(nHidUnits)
+        self.nIn = nIn
+        self.nOutU = nOutU
+        self.w = self.initWeights()
+
+    # Randomly initialize each weight layer
+    def initWeights(self):
+        axis1 = self.nIn
+        w = []
+        for outUnits in self.hUPL + [self.nOutU]:
+            tempW = np.random.random((outUnits, axis1))
+            w.append(tempW)
+            axis1 = outUnits
+        return w
+
+    # Pushes input through a layer
+    # Inputs:
+    #   inpt = K x N matrix of input vectors
+    #   f = activation function for hidden layers
+    def feed_forward(self,inpt,f,g):
+        x = inpt
+        outputs = []
+        for i in range(self.nHL):
+            w_curr = self.w[i]
+            temp = np.dot(w_curr,x)
+            x = f(temp)
+            outputs.append(x)
+
+        if self.nHL > 0:
+            pre = np.dot(self.w[self.nHL], outputs[self.nHL - 1])
+        else:
+            pre = np.dot(self.w[self.nHL], x)
+        out_final = g(pre)
+        return outputs + [out_final]
+
+    # Performs weight updates using a Squared Loss function, sigmoid activation and gradient descent
+    # Inputs:
+    #   inpt = K x N matrix of input vectors
+    #   prevGrad = Partial derivative of loss function with respect to the unit's pre-activation value (eg. dE_dz)
+    def back_propagate(self,inpt,outputs,t):
+        gradients = []
+        newList = [inpt] + outputs
+        nlistLen = len(newList)
+        o_ = newList[self.nHL + 1]
+        dE_dO = o_ - t
+        ##EE = -np.sum(np.dot(np.transpose(t),np.log(o_)))
+        EE = np.sum(np.sum(0.5 * (dE_dO)**2,axis=1))
+        print("EE ")
+        print(EE)
+
+        prevGrad = dE_dO
+
+        for i in range(nlistLen - 1,0,-1):
+            # PROBLEMS WITH O_K and X_K
+            o_k = newList[i]
+            x_k = newList[i - 1]
+            dSig_O = dSig(o_k)
+
+            dE_dZ = prevGrad * dSig_O
+            #dE_dZ = np.dot(prevGrad,dSig(o_k))
+
+            dE_dW = np.sum(np.matmul(x_k.T[:,:,np.newaxis],dE_dZ.T[:,np.newaxis,:]),axis=0,keepdims=True)
+            print("DE_DW SHAPE " + str(dE_dW.shape))
+            gradients.append(dE_dW)
+
+            prevGrad = np.dot(np.transpose(self.w[i-1]),dE_dZ)
+        return gradients
+
+    def train(self,inpt,t,f,g,numEpoch,learnR):
+        for epoch in range(numEpoch):
+            print(epoch)
+            outputs = self.feed_forward(inpt, f, g)
+            gradients = self.back_propagate(inpt,outputs,t)
+            gradLen = len(gradients)
+            for ind in range(gradLen-1,-1,-1):
+                w_ind = gradLen - 1 - ind
+                for n_grad in gradients[ind]:
+                    #print("w shape " + str(w[w_ind].shape))
+                    #print("n grad shape " + str(n_grad.T.shape))
+                    self.w[w_ind] -= (learnR * n_grad.T)
+
+    def predict(self,inpt,f,g,t):
+        outputs = self.feed_forward(inpt,f,g)
+        prediction = outputs[len(outputs) - 1]
+        np.savetxt("Predictions.txt", prediction, delimiter=",")
+        counter = 0
+        hardPredict = np.argmax(prediction, axis=0)
+        for ind,val in enumerate(hardPredict):
+            if val == t[ind]:
+                counter +=1
+        print ("Test accuracy: " + str(float(counter)/len(hardPredict)))
+
 def sigmoid_(z):
     entries = [[sigmoid_pos(x) if x >= 0 else sigmoid_neg(x) for x in row] for row in z]
     return np.array(entries)
@@ -34,164 +138,3 @@ def get_moments(x):
 
 def standardize(x,means=0,sd=1):
     return (x - means)/sd
-
-# Randomly initialize list of weights for feedforward and updating
-# Inputs:
-#   nHidUnits = Number of units per layer
-#   nOutU = Number of output units
-def initWeights(nHidUnits, nIn, nOutU):
-    axis1 = nIn
-    w = []
-    for outUnits in nHidUnits + [nOutU]:
-        tempW = np.random.random((outUnits, axis1)) / 100
-        w.append(tempW)
-        axis1 = outUnits
-    return w
-
-# Pushes input through a layer
-# Inputs:
-#   inpt = K x N matrix of input vectors
-#   w = J x K weight matrix
-#   f = activation function for hidden layers
-def feed_forward(inpt,w,nLayers,f,g):
-    x = inpt.astype(dtype=np.float32)
-    outputs = []
-    for i in range(nLayers):
-        w_curr = w[i]
-        temp = np.dot(w_curr,x)
-        x = f(temp)
-        outputs.append(x)
-
-    if nLayers > 0:
-        pre = np.dot(w[nLayers],outputs[nLayers-1])
-    else:
-        pre = np.dot(w[nLayers],x)
-    out_final = g(pre)
-    return outputs + [out_final]
-
-# Performs weight updates using a Squared Loss function, sigmoid activation and gradient descent
-# Inputs:
-#   inpt = K x N matrix of input vectors
-#   w = J x K weight matrix for particular layer
-#   prevGrad = Partial derivative of loss function with respect to the unit's pre-activation value (eg. dE_dz)
-def back_propagate(inpt,w,nLayer,outputs,t):
-    gradients = []
-    newList = [inpt] + outputs
-    nlistLen = len(newList)
-    o_ = newList[nLayer+1]
-    dE_dO = o_ - t
-    ##EE = -np.sum(np.dot(np.transpose(t),np.log(o_)))
-    EE = np.sum(np.sum(0.5 * (dE_dO)**2,axis=1))
-    print("EE ")
-    print(EE)
-
-    prevGrad = dE_dO
-
-    for i in range(nlistLen - 1,0,-1):
-        # PROBLEMS WITH O_K and X_K
-        o_k = newList[i]
-        x_k = newList[i - 1]
-        dSig_O = dSig(o_k)
-
-        dE_dZ = prevGrad * dSig_O
-        print(prevGrad.shape)
-        #dE_dZ = np.dot(prevGrad,dSig(o_k))
-
-        dE_dW = np.sum(np.matmul(x_k.T[:,:,np.newaxis],dE_dZ.T[:,np.newaxis,:]),axis=0,keepdims=True)
-        gradients.append(dE_dW)
-
-        #UNCOMMENT IF NECESSARY
-        # for ex in range(x_k.shape[1]):
-        #     x_k_n = x_k[:, np.newaxis, ex]
-        #     dE_dW = np.dot(x_k_n,dE_dZ[:,ex,np.newaxis].T)
-        #     # dE_dW = dE_dZ * x_k
-        #     #dE_dW_ = np.sum(dE_dW,axis=1,keepdims=True)
-        #     if ex <= x_k.shape[1] / 2  and ex > 2:
-        #         layerGrad[0] += dE_dW
-        #     elif ex > (x_k.shape[1] / 2):
-        #         layerGrad[1] += dE_dW
-        #     else:
-        #         layerGrad.append(dE_dW)
-
-            #prevGrad = dE_dZ * w[i-1]
-        prevGrad = np.dot(np.transpose(w[i-1]),dE_dZ)
-            #prevGrad = np.dot(dE_dZ,w[i-1])
-
-        #UNCOMMENT If NECESSARY
-        #gradients.append(layerGrad)
-        #layerGrad = []
-
-    print("grad len " + str(gradients[1].shape))
-    return gradients
-
-def train(inpt,w,nHidLayers,t,f,g,numEpoch,learnR):
-    for epoch in range(numEpoch):
-        print(epoch)
-        outputs = feed_forward(inpt, w, nHidLayers, f, g)
-        gradients = back_propagate(inpt,w,nHidLayers,outputs,t)
-        gradLen = len(gradients)
-        for ind in range(gradLen-1,-1,-1):
-            w_ind = gradLen - 1 - ind
-            for n_grad in gradients[ind]:
-                #print("w shape " + str(w[w_ind].shape))
-                #print("n grad shape " + str(n_grad.T.shape))
-                w[w_ind] -= (learnR * n_grad.T)
-    return w
-
-def predict(inpt,w,nLayers,f,g,t):
-    outputs = feed_forward(inpt,w,nLayers,f,g)
-    prediction = outputs[len(outputs) - 1]
-    np.savetxt("Predictions.txt", prediction, delimiter=",")
-    counter = 0
-    hardPredict = np.argmax(prediction, axis=0)
-    for ind,val in enumerate(hardPredict):
-        if val == t[ind]:
-            counter +=1
-    print ("Test accuracy: " + str(float(counter)/len(hardPredict)))
-
-if __name__=='__main__':
-    nHidUnits = [11]
-    nHidLay = len(nHidUnits)
-    nOutputU = 10
-    #w = []
-
-    # x is a N x numInputs mtx
-    x = np.loadtxt(open("/home/alex/ML_datasets/fashion-mnist_train.csv", "rb"), delimiter=",", skiprows=1)
-    x_test = np.loadtxt(open("/home/alex/ML_datasets/fashion-mnist_test.csv", "rb"), delimiter=",", skiprows=1)
-    #x = np.loadtxt(open("/home/alex/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
-    #x_test = np.loadtxt(open("/home/alex/ML-models/train_proto.csv", "rb"), delimiter=",", skiprows=1)
-    truth = np.transpose(x[:, 0]).astype(int)
-    truth_test = np.transpose(x_test[:, 0]).astype(int)
-
-    # Eliminate column of labels from set and reshape
-    x = np.delete(x, np.s_[:1], 1)
-    x = np.transpose(x)
-
-    print(x.shape)
-    nInputs = x.shape[0]
-
-    # means,sd = get_moments(x)
-    # x = standardize(x,means,sd)
-    x = x/255
-
-    x_test = np.delete(x_test, np.s_[:1], 1)
-    x_test = np.transpose(x_test)
-
-    x_dim = x.shape
-    t = np.zeros((10, x_dim[1]))
-    arange = np.arange(x_dim[1])
-    t[truth, arange] = 1
-    print(t)
-
-    #weights = []
-    weights = initWeights(nHidUnits,nInputs,nOutputU)
-
-
-    #print(weights[0])
-    w_trained = train(x,weights,nHidLay,t,sigmoid_,softmax_,700,0.1)
-    #print(w_trained[0])
-    for index,w_ in enumerate(w_trained):
-        np.savetxt("weights_nn_layer" + str(index) + ".txt",w_,delimiter=",")
-    # for index in range(nHidLay+1):
-    #     weights.append(np.loadtxt(open("weights_nn_layer" + str(index) + ".txt","rb"),delimiter=","))
-    predict(x_test,w_trained,nHidLay,sigmoid_pos,softmax_,truth_test)
